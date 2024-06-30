@@ -2,21 +2,44 @@ package main
 
 import (
 	"flag"
+	"sync"
 	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-type Config struct {
-	Mnemonic              string `mapstructure:"mnemonic"`
-	MasterContractAddress string `mapstructure:"master_contract_address"`
-	LiteConnectionsURL    string `mapstructure:"lite_connections_url"`
-}
+type (
+	Config struct {
+		sync.RWMutex
+		MasterContractAddress     string `mapstructure:"master_contract_address"`
+		LiteConnectionsURLTestnet string `mapstructure:"lite_connections_url_testnet"`
+		LiteConnectionsURLMainnet string `mapstructure:"lite_connections_url_mainnet"`
+		TONStakingContractAddress string `mapstructure:"ton_stakers_contract_address"`
+
+		AWSConfig `mapstructure:",squash"`
+	}
+
+	AWSConfig struct {
+		SecretManagerSecretName string `mapstructure:"aws_secret_manager_secret_name"`
+		AccessKeyID             string `mapstructure:"aws_access_key_id"`
+		SecretAccessKey         string `mapstructure:"aws_secret_access_key"`
+		Region                  string `mapstructure:"aws_region"`
+	}
+)
 
 var envs = []*EnvVar{
 	DefaultMnemonic,
 	DefaultMasterContractAddress,
+	DefaultLiteConnectionsURLTestnet,
+	DefaultLiteConnectionsURLMainnet,
+	DefaultTonStakingContractAddress,
+
+	// AWS
+	DefaultAWSSecretName,
+	DefaultAWSAccessKeyID,
+	DefaultAWSSecretAccessKey,
+	DefaultAWSRegion,
 }
 
 func NewConfig() (*Config, error) {

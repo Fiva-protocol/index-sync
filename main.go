@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"crypto/ed25519"
-	"encoding/hex"
 	"fmt"
 	"log"
+	"math/big"
 
 	cfg "github.com/igefined/go-kit/config"
 	"github.com/xssnick/tonutils-go/address"
@@ -15,7 +16,7 @@ import (
 )
 
 func main() {
-	ctx := cfg.SigTermIntCtx()
+	sigCtx := cfg.SigTermIntCtx()
 
 	config, err := NewConfig()
 	if err != nil {
@@ -24,70 +25,139 @@ func main() {
 
 	client := liteclient.NewConnectionPool()
 
-	if err = client.AddConnectionsFromConfigUrl(ctx, config.LiteConnectionsURL); err != nil {
+	if err = client.AddConnectionsFromConfigUrl(sigCtx, config.LiteConnectionsURLTestnet); err != nil {
+		log.Fatalln("add connections err:", err)
+	}
+
+	var (
+		api            = ton.NewAPIClient(client)
+		ctx            = client.StickyContext(sigCtx)
+		masterAddr     = address.MustParseAddr(config.MasterContractAddress)
+		tonStakingAddr = address.MustParseAddr(config.TONStakingContractAddress)
+	)
+
+	index, err := getIndex(ctx, api, masterAddr)
+	if err != nil {
+		log.Fatalln("get index err:", err)
+	}
+
+	log.Println("previous index:", index)
+
+	index, err = calculateIndex(ctx, config.LiteConnectionsURLMainnet, tonStakingAddr)
+	if err != nil {
+		log.Fatalln("calculate index err:", err)
+	}
+
+	privateKey, err := GetPrivateKey(ctx, config)
+	if err != nil {
+		log.Fatalln("get privateKey err:", err)
+	}
+
+	if err = updateIndex(ctx, api, privateKey, masterAddr, index.Uint64()); err != nil {
+		log.Fatalln("update index err:", err)
+	}
+
+	index, err = getIndex(ctx, api, masterAddr)
+	if err != nil {
+		log.Fatalln("get index err:", err)
+	}
+
+	log.Println("current index:", index)
+	log.Println("External message successfully processed and should be added to blockchain soon!")
+}
+
+func getIndex(ctx context.Context, api *ton.APIClient, addr *address.Address) (*big.Int, error) {
+	block, err := api.CurrentMasterchainInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := api.WaitForBlock(block.SeqNo).RunGetMethod(ctx, block, addr, "get_index")
+	if err != nil {
+		return nil, err
+	}
+
+	return res.MustInt(0), nil
+}
+
+func updateIndex(
+	ctx context.Context,
+	api *ton.APIClient,
+	privateKey ed25519.PrivateKey,
+	addr *address.Address,
+	index uint64,
+) error {
+	op := uint64(0xe0178583) // "update_index" into hex
+
+	bodyToSign := cell.BeginCell().
+		MustStoreUInt(op, 32).
+		MustStoreUInt(index, 32)
+
+	sign := bodyToSign.EndCell().Sign(privateKey)
+	payload := cell.BeginCell().MustStoreSlice(sign, 512).MustStoreBuilder(bodyToSign).EndCell()
+
+	msg := &tlb.ExternalMessage{
+		DstAddr: addr,
+		Body:    payload,
+	}
+
+	err := api.SendExternalMessage(ctx, msg)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func calculateIndex(
+	ctx context.Context,
+	url string,
+	addr *address.Address,
+) (*big.Int, error) {
+	var (
+		index = new(big.Float)
+
+		client = liteclient.NewConnectionPool()
+	)
+
+	if err := client.AddConnectionsFromConfigUrl(ctx, url); err != nil {
 		log.Fatalln("add connections err:", err)
 	}
 
 	api := ton.NewAPIClient(client)
-	ctx = client.StickyContext(ctx)
 
 	block, err := api.CurrentMasterchainInfo(ctx)
 	if err != nil {
-		log.Fatalln("get block err:", err.Error())
+		return nil, err
 	}
 
-	res, err := api.
-		WaitForBlock(block.SeqNo).
-		RunGetMethod(ctx, block, address.MustParseAddr(config.MasterContractAddress), "get_index")
+	res, err := api.WaitForBlock(block.SeqNo).RunGetMethod(ctx, block, addr, "get_pool_full_data")
 	if err != nil {
-		log.Fatalln("run get method err:", err.Error())
+		return nil, err
 	}
 
-	previousIndex := res.MustInt(0)
-	log.Println("previous index:", previousIndex)
-
-	op := uint64(0x75706461) // "update_index" в hex
-	newIndex := uint64(123)  // Пример нового индекса
-
-	bodyToSign := cell.BeginCell().
-		MustStoreUInt(op, 32).
-		MustStoreUInt(newIndex, 32)
-
-	privateKey, err := hexStringToEd25519PrivateKey("")
-	if err != nil {
-		panic(err)
+	tuple := res.AsTuple()
+	totalBalance, ok := tuple[2].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("total balance is not int")
 	}
 
-	sign := bodyToSign.EndCell().Sign(privateKey)
-	payload := cell.BeginCell().MustStoreBuilder(bodyToSign).MustStoreSlice(sign, 512).EndCell()
-
-	msg := &tlb.ExternalMessage{
-		DstAddr: address.MustParseAddr(config.MasterContractAddress),
-		Body:    payload,
+	supply, ok := tuple[13].(*big.Int)
+	if !ok {
+		return nil, fmt.Errorf("supply is not int")
 	}
 
-	err = api.SendExternalMessage(ctx, msg)
-	if err != nil {
-		log.Printf("send external message err: %s", err.Error())
-		return
-	}
+	log.Println("total balance:", totalBalance)
+	log.Println("supply:", supply)
 
-	log.Println("External message successfully processed and should be added to blockchain soon!")
-}
+	floatTotalBalance := new(big.Float).SetInt(totalBalance)
+	floatSupply := new(big.Float).SetInt(supply)
 
-func hexStringToEd25519PrivateKey(hexKey string) (ed25519.PrivateKey, error) {
-	// Decode the hex string to bytes
-	privateKeyBytes, err := hex.DecodeString(hexKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode hex string: %w", err)
-	}
+	index = index.Quo(floatTotalBalance, floatSupply)
+	index = index.Mul(index, big.NewFloat(1000.0))
+	log.Println("index:", index.String())
 
-	// Ensure the length is correct for Ed25519 private keys
-	if len(privateKeyBytes) != ed25519.PrivateKeySize {
-		return nil, fmt.Errorf("invalid private key length: %d", len(privateKeyBytes))
-	}
+	i, _ := index.Int64()
 
-	// Convert to Ed25519 private key
-	privateKey := ed25519.PrivateKey(privateKeyBytes)
-	return privateKey, nil
+	return big.NewInt(i), nil
 }
