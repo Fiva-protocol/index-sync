@@ -55,6 +55,10 @@ ifeq ($(wildcard $(GOLANGCI_BIN)),)
 GOLANGCI_BIN:=$(LOCAL_BIN)/golangci-lint
 endif
 
+ECR_REPO_NAME := fiva
+AWS_REGION := us-east-1
+DOCKER_IMAGE := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(ECR_REPO_NAME):latest
+
 # Linter will check only diffs with main branch (default)
 .PHONY: lint
 lint: install-lint
@@ -88,4 +92,17 @@ bin/:
 build:
 	go build -tags '${TAGS}' ${LDFLAGS} -o ${BUILD_DIR}/${BINARY_NAME} ${PACKAGE}
 
+ecr-login:
+	@echo "Logging in to Amazon ECR..."
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 
+remove-previous:
+	@echo "Removing previous Docker image from ECR..."
+	aws ecr batch-delete-image --repository-name $(ECR_REPO_NAME) --region $(AWS_REGION) --image-ids imageTag=latest
+
+build-push-image: ecr-login remove-previous
+	@echo "Building Docker image..."
+	docker build -t $(ECR_REPO_NAME) .
+	@echo "Tagging Docker image..."
+	docker tag $(ECR_REPO_NAME):latest $(DOCKER_IMAGE)
+	docker push $(DOCKER_IMAGE)

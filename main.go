@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"time"
 
 	cfg "github.com/igefined/go-kit/config"
 	"github.com/xssnick/tonutils-go/address"
@@ -43,7 +44,7 @@ func main() {
 
 	log.Println("previous index:", index)
 
-	index, err = calculateIndex(ctx, config.LiteConnectionsURLMainnet, tonStakingAddr)
+	index, err = retryCalculateIndex(ctx, config.LiteConnectionsURLMainnet, tonStakingAddr, 5, time.Second*2)
 	if err != nil {
 		log.Fatalln("calculate index err:", err)
 	}
@@ -63,7 +64,7 @@ func main() {
 	}
 
 	log.Println("current index:", index)
-	log.Println("External message successfully processed and should be added to blockchain soon!")
+	log.Println("External message successfully processed and should be added to blockchain soon")
 }
 
 func getIndex(ctx context.Context, api *ton.APIClient, addr *address.Address) (*big.Int, error) {
@@ -160,4 +161,27 @@ func calculateIndex(
 	i, _ := index.Int64()
 
 	return big.NewInt(i), nil
+}
+
+func retryCalculateIndex(
+	ctx context.Context,
+	liteConnectionsURLMainnet string,
+	tonStakingAddr *address.Address,
+	maxRetries int,
+	retryDelay time.Duration,
+) (*big.Int, error) {
+	var index *big.Int
+	var err error
+
+	for i := 0; i < maxRetries; i++ {
+		index, err = calculateIndex(ctx, liteConnectionsURLMainnet, tonStakingAddr)
+		if err == nil {
+			return index, nil
+		}
+
+		log.Printf("Retry %d/%d: calculateIndex error: %v", i+1, maxRetries, err)
+		time.Sleep(retryDelay)
+	}
+
+	return nil, err
 }
