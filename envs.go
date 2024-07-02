@@ -1,7 +1,8 @@
 package main
 
 const (
-	defaultAddress                   = "EQAHmEAgPST8XV4GN6r6E4NesuLs7lDbzsSW1ougMxItut9S"
+	defaultAddress = "EQAHmEAgPST8XV4GN6r6E4NesuLs7lDbzsSW1ougMxItut9S"
+	// defaultAddress                   = "EQCnF65lKoXuXxq4XWDVT8OHA6C4XUsrGYjgkCsBpBJKgL51"
 	defaultLiteConnectionURLTestnet  = "https://ton-blockchain.github.io/testnet-global.config.json"
 	defaultLiteConnectionURLMainnet  = "https://ton.org/global.config.json"
 	defaultTONStakersContractAddress = "EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o"
