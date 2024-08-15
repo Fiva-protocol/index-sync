@@ -21,5 +21,5 @@ type ResponseSuccess struct {
 var InternalServerErr = events.APIGatewayProxyResponse{
 	StatusCode: http.StatusInternalServerError,
 	Headers:    headers,
-	Body:       fmt.Sprint(errMsgFmt, "internal Server Error"),
+	Body:       fmt.Sprintf(errMsgFmt, "internal Server Error"),
 }

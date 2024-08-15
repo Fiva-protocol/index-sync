@@ -3,30 +3,27 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"github.com/xssnick/tonutils-go/address"
-	"github.com/xssnick/tonutils-go/tvm/cell"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
+	"github.com/xssnick/tonutils-go/tvm/cell"
 )
 
-func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
+func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	sigCtx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 
-	config, err := NewConfig()
-	if err != nil {
-		log.Println("init config err,", err)
-		return InternalServerErr, err
-	}
+	config := GetConfig()
+	_ = sigCtx
 
 	client := liteclient.NewConnectionPool()
-	if err = client.AddConnectionsFromConfigUrl(sigCtx, config.LiteConnectionsURL); err != nil {
-		log.Println("add connections err:", err)
+	if err := client.AddConnectionsFromConfigUrl(sigCtx, config.LiteConnectionURL); err != nil {
+		fmt.Println("add connections err:", err)
 		return InternalServerErr, err
 	}
 
@@ -35,9 +32,9 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		tonStakingAddr = address.MustParseAddr(config.TONStakingContractAddress)
 	)
 
-	index, err := retryCalculateIndex(ctx, config.LiteConnectionsURL, tonStakingAddr, 5, time.Second*2)
+	index, err := retryCalculateIndex(ctx, config.LiteConnectionURL, tonStakingAddr, 5, time.Second*2)
 	if err != nil {
-		log.Println("calculate index err:", err)
+		fmt.Println("calculate index err:", err)
 		return InternalServerErr, err
 	}
 
@@ -48,7 +45,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	privateKey, err := GetPrivateKey(ctx, config)
 	if err != nil {
-		log.Println("get privateKey err:", err)
+		fmt.Println("get privateKey err:", err)
 		return InternalServerErr, err
 	}
 
@@ -62,7 +59,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	body, err := json.Marshal(&out)
 	if err != nil {
-		log.Println("json marshal err:", err)
+		fmt.Println("json marshal err:", err)
 		return InternalServerErr, err
 	}
 

@@ -8,30 +8,15 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-secretsmanager-caching-go/secretcache"
 )
 
-const versionStage = "AWSCURRENT"
+var secretCache, _ = secretcache.New()
 
 func GetPrivateKey(ctx context.Context, cfg *Config) (ed25519.PrivateKey, error) {
-	awsConfig, err := config.LoadDefaultConfig(ctx, config.WithRegion(cfg.AWSConfig.Region))
+	result, err := secretCache.GetSecretStringWithContext(ctx, cfg.KeyPairSecretName)
 	if err != nil {
 		log.Fatalln("load aws default config err:", err)
-		return nil, err
-	}
-
-	svc := secretsmanager.NewFromConfig(awsConfig)
-
-	input := &secretsmanager.GetSecretValueInput{
-		SecretId:     aws.String(cfg.AWSConfig.SecretManagerSecretName),
-		VersionStage: aws.String(versionStage),
-	}
-
-	result, err := svc.GetSecretValue(ctx, input)
-	if err != nil {
-		log.Fatalln("get secret value err:", err)
 		return nil, err
 	}
 
@@ -40,7 +25,7 @@ func GetPrivateKey(ctx context.Context, cfg *Config) (ed25519.PrivateKey, error)
 		PublicKey  string `json:"public_key"`
 	}
 	var keypair KeyPair
-	if err = json.Unmarshal([]byte(*result.SecretString), &keypair); err != nil {
+	if err = json.Unmarshal([]byte(result), &keypair); err != nil {
 		return nil, err
 	}
 

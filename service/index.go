@@ -56,7 +56,7 @@ func calculateIndex(
 	floatSupply := new(big.Float).SetInt(supply)
 
 	index = index.Quo(floatTotalBalance, floatSupply)
-	index = index.Mul(index, big.NewFloat(1000.0))
+	index = index.Mul(index, big.NewFloat(1_000_000_000))
 	log.Println("index:", index.String())
 
 	i, _ := index.Int64()
