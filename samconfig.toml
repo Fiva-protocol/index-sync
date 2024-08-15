@@ -30,15 +30,42 @@ watch = true
 
 [default.local_start_api.parameters]
 warm_containers = "EAGER"
-parameter_overrides = "TargetEnv=\"testnet\" LiteConnectionURL=\"https://ton.org/global.config.json\" TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\" KeyPairSecretName=\"fiva_keypair\""
+parameter_overrides = [
+    "TargetEnv=\"testnet\"",
+    "LiteConnectionURL=\"https://ton.org/global.config.json\"",
+    "TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\"",
+    "KeyPairSecretName=\"fiva_keypair\""
+]
 
 [default.local_start_lambda.parameters]
 warm_containers = "EAGER"
 
 [testnet.deploy.parameters]
-region = "ue-central-1"
-parameter_overrides = "TargetEnv=\"testnet\" LiteConnectionURL=\"https://ton.org/global.config.json\" TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\" KeyPairSecretName=\"fiva_keypair\""
+stack_name = "index-sync-testnet"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "index-sync-testnet"
+disable_rollback = true
+image_repositories = []
+parameter_overrides = [
+    "TargetEnv=\"testnet\"",
+    "LiteConnectionURL=\"https://ton.org/global.config.json\"",
+    "TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\"",
+    "KeyPairSecretName=\"fiva_keypair\""
+]
 
 [mainnet.deploy.parameters]
-region = "ue-central-1"
-parameter_overrides = "TargetEnv=\"testnet\" LiteConnectionURL=\"https://ton.org/global.config.json\" TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\" KeyPairSecretName=\"fiva_keypair\""
+stack_name = "index-sync-mainnet"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "index-sync-mainnet"
+disable_rollback = true
+image_repositories = []
+parameter_overrides = [
+    "TargetEnv=\"mainnet\"",
+    "LiteConnectionURL=\"https://ton.org/global.config.json\"",
+    "TonStakersAddress=\"EQD2_4d91M4TVbEBVyBF8J1UwpMJc361LKVCz6bBlffMW05o\"",
+    "KeyPairSecretName=\"fiva_keypair\""
+]

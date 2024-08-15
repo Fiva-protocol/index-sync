@@ -20,7 +20,7 @@ Parameters:
     Description: Name of secret variable stored into Secret Manager
 Globals:
   Function:
-    Timeout: 5
+    Timeout: 60
     MemorySize: 128
     LoggingConfig:
       LogFormat: JSON

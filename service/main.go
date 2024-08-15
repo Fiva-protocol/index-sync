@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/aws/aws-lambda-go/events"
@@ -14,16 +16,19 @@ import (
 	"github.com/xssnick/tonutils-go/tvm/cell"
 )
 
+var (
+	client *liteclient.ConnectionPool
+	config *Config
+
+	once sync.Once
+)
+
 func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
-	sigCtx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	sigCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-
-	config := GetConfig()
-	_ = sigCtx
-
-	client := liteclient.NewConnectionPool()
+	fmt.Println(config)
 	if err := client.AddConnectionsFromConfigUrl(sigCtx, config.LiteConnectionURL); err != nil {
-		fmt.Println("add connections err:", err)
+		log.Println("add connections err:", err)
 		return InternalServerErr, err
 	}
 
@@ -34,7 +39,7 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 
 	index, err := retryCalculateIndex(ctx, config.LiteConnectionURL, tonStakingAddr, 5, time.Second*2)
 	if err != nil {
-		fmt.Println("calculate index err:", err)
+		log.Println("calculate index err:", err)
 		return InternalServerErr, err
 	}
 
@@ -45,7 +50,7 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 
 	privateKey, err := GetPrivateKey(ctx, config)
 	if err != nil {
-		fmt.Println("get privateKey err:", err)
+		log.Println("get privateKey err:", err)
 		return InternalServerErr, err
 	}
 
@@ -59,7 +64,7 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 
 	body, err := json.Marshal(&out)
 	if err != nil {
-		fmt.Println("json marshal err:", err)
+		log.Println("json marshal err:", err)
 		return InternalServerErr, err
 	}
 
@@ -72,4 +77,11 @@ func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, e
 
 func main() {
 	lambda.Start(handler)
+}
+
+func init() {
+	once.Do(func() {
+		config = NewConfig()
+		client = liteclient.NewConnectionPool()
+	})
 }
