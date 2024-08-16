@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/aws/aws-lambda-go/events"
 	"net/http"
+
+	"github.com/aws/aws-lambda-go/events"
 )
 
 const errMsgFmt = `{"error":"%s"}`

@@ -13,6 +13,11 @@ import (
 
 var secretCache, _ = secretcache.New()
 
+type KeyPair struct {
+	PrivateKey string `json:"private_key"`
+	PublicKey  string `json:"public_key"`
+}
+
 func GetPrivateKey(ctx context.Context, cfg *Config) (ed25519.PrivateKey, error) {
 	result, err := secretCache.GetSecretStringWithContext(ctx, cfg.KeyPairSecretName)
 	if err != nil {
@@ -20,10 +25,6 @@ func GetPrivateKey(ctx context.Context, cfg *Config) (ed25519.PrivateKey, error)
 		return nil, err
 	}
 
-	type KeyPair struct {
-		PrivateKey string `json:"private_key"`
-		PublicKey  string `json:"public_key"`
-	}
 	var keypair KeyPair
 	if err = json.Unmarshal([]byte(result), &keypair); err != nil {
 		return nil, err

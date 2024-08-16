@@ -9,6 +9,7 @@ Parameters:
   TargetEnv:
     Type: String
     Description: Target environment
+    Default: stage
   LiteConnectionURL:
     Type: String
     Description: URL to TON lite client
@@ -18,12 +19,14 @@ Parameters:
   KeyPairSecretName:
     Type: String
     Description: Name of secret variable stored into Secret Manager
+
 Globals:
   Function:
     Timeout: 60
     MemorySize: 128
     LoggingConfig:
       LogFormat: JSON
+
 Resources:
   IndexSyncFunction:
     Type: AWS::Serverless::Function
@@ -33,6 +36,7 @@ Resources:
       CodeUri: service/
       Handler: bootstrap
       Runtime: provided.al2023
+      Role: !GetAtt IndexSyncIAMRole.Arn
       Architectures:
         - x86_64
       Events:
@@ -41,6 +45,7 @@ Resources:
           Properties:
             Path: /index
             Method: GET
+            RestApiId: !Ref APIGatewayRest
       Environment:
         Variables:
           TARGET_ENV: !Ref TargetEnv
@@ -48,13 +53,108 @@ Resources:
           TON_STAKERS_ADDRESS: !Ref TonStakersAddress
           KEY_PAIR_SECRET_NAME: !Ref KeyPairSecretName
 
-Outputs:
-  API:
-    Description: API Gateway endpoint URL for target environment
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/${TargetEnv}/index/"
-  Function:
-    Description: Index sync Lambda Function ARN
-    Value: !GetAtt IndexSyncFunction.Arn
-  FunctionIamRole:
-    Description: Implicit IAM Role created for Index Sync function
-    Value: !GetAtt IndexSyncFunctionRole.Arn
+  APIGatewayRest:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      ProtocolType: HTTP
+      Name: !Sub "${TargetEnv}-index-sync-api"
+    DependsOn:
+      - IndexSyncFunction
+
+  APIGatewayMethod:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref APIGatewayRest
+      ConnectionType: INTERNET
+      CredentialsArn: !GetAtt APIGatewayIAMRole.Arn
+      PassthroughBehavior: WHEN_NO_MATCH
+      TimeoutInMillis: 29000
+      IntegrationMethod: POST
+      IntegrationType: AWS_PROXY
+      PayloadFormatVersion: "2.0"
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${IndexSyncFunction.Arn}/invocations"
+
+  APIGatewayDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn: APIGatewayMethod
+    Properties:
+      ApiId: !Ref APIGatewayRest
+
+  APIGatewayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      DeploymentId: !Ref APIGatewayDeployment
+      ApiId: !Ref APIGatewayRest
+      StageName: !Ref TargetEnv
+
+  APIGatewayResource:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - APIGatewayRest
+      - IndexSyncFunction
+      - APIGatewayMethod
+    Properties:
+      ApiId: !Ref APIGatewayRest
+      RouteKey: GET /index
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref APIGatewayMethod
+
+  APIGatewayIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ""
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "apigateway.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: LambdaAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "lambda:*"
+                Resource: !GetAtt IndexSyncFunction.Arn
+
+  IndexSyncIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        - PolicyName: IndexSyncSecretAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action:
+                  - "secretsmanager:GetSecretValue"
+                  - "secretsmanager:DescribeSecret"
+                Resource:
+                  - !Sub "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${TargetEnv}_${KeyPairSecretName}*"
+        - PolicyName: LambdaLogging
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogStream'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:PutLogEvents'
+                Resource: !Sub "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${AWS::StackName}*"

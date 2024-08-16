@@ -3,11 +3,6 @@ ifneq (,$(wildcard .env))
 	export
 endif
 
-.PHONY: update
-update:
-	go mod tidy
-	go mod verify
-
 .PHONY: build
 build:
 	sam build
@@ -16,6 +11,6 @@ build:
 run-local: build
 	sam local start-api
 
-.PHONY: deploy-testnet
-deploy-testnet: build
-	sam deploy --config-env testnet
+.PHONY: deploy
+deploy: build
+	sam deploy --config-env ${ENV}

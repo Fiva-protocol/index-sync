@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"sync"
@@ -26,7 +25,7 @@ var (
 func handler(_ events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	sigCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	fmt.Println(config)
+
 	if err := client.AddConnectionsFromConfigUrl(sigCtx, config.LiteConnectionURL); err != nil {
 		log.Println("add connections err:", err)
 		return InternalServerErr, err
